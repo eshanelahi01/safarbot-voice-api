@@ -11,12 +11,22 @@ class FuzzyService:
     def __init__(self):
         self.catalog = {"cities": [], "providers": [], "terminals": []}
         self.ready = False
+        self.error = None
 
     def load(self):
-        if CATALOG_PATH.exists():
+        self.ready = False
+        self.error = None
+        self.catalog = {"cities": [], "providers": [], "terminals": []}
+
+        try:
+            if not CATALOG_PATH.exists():
+                raise FileNotFoundError(f"Catalog not found at {CATALOG_PATH}")
+
             with open(CATALOG_PATH, "r", encoding="utf-8") as f:
                 self.catalog = json.load(f)
-        self.ready = True
+            self.ready = True
+        except Exception as exc:
+            self.error = str(exc)
 
     def fuzzy_match(self, value: str, candidates: list[str], threshold: int):
         if not value or not candidates:
@@ -58,6 +68,12 @@ class FuzzyService:
                 meta["terminal_score"] = score
 
         return normalized, meta
+
+    def status(self) -> dict:
+        return {
+            "ready": self.ready,
+            "error": self.error,
+        }
 
 
 fuzzy_service = FuzzyService()

@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException
 
 from app.config import settings
 from app.schemas import TextRequest, VoiceResponse
-from app.services.dialogue_service import decide
+from app.services.dialogue_service import decide, get_session
 from app.services.fuzzy_service import fuzzy_service
 from app.services.model_loader import registry
 from app.services.nlu_service import predict_text
@@ -24,6 +24,26 @@ app = FastAPI(
 )
 
 
+def dependency_status() -> dict:
+    return {
+        "model_registry": registry.status(),
+        "fuzzy_catalog": fuzzy_service.status(),
+    }
+
+
+def ensure_dependencies_ready() -> dict:
+    status = dependency_status()
+    if not all(service["ready"] for service in status.values()):
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": "Service not ready",
+                "dependencies": status,
+            },
+        )
+    return status
+
+
 @app.get("/")
 def root():
     return {
@@ -40,10 +60,8 @@ def healthz():
 
 @app.get("/readyz")
 def readyz():
-    ready = registry.ready and fuzzy_service.ready
-    if not ready:
-        raise HTTPException(status_code=503, detail="Service not ready")
-    return {"ready": True}
+    status = ensure_dependencies_ready()
+    return {"ready": True, "dependencies": status}
 
 
 @app.post("/voice/text", response_model=VoiceResponse)
@@ -51,8 +69,11 @@ def voice_text(payload: TextRequest):
     if not payload.text.strip():
         raise HTTPException(status_code=400, detail="text cannot be empty")
 
-    nlu = predict_text(payload.text)
-    decision = decide(payload.session_id, nlu, payload.context)
+    ensure_dependencies_ready()
+
+    session = get_session(payload.session_id, payload.context)
+    nlu = predict_text(payload.text, expected_action=session.get("last_action"))
+    decision = decide(payload.session_id, nlu, payload.context, session=session)
 
     return VoiceResponse(
         session_id=payload.session_id,
@@ -67,4 +88,5 @@ def voice_text(payload: TextRequest):
         reply_text=decision["reply_text"],
         audio_base64="",
         routes_preview=[],
+        conversation_state=decision["conversation_state"],
     )

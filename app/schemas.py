@@ -29,3 +29,4 @@ class VoiceResponse(BaseModel):
     reply_text: str
     audio_base64: str = ""
     routes_preview: List[RoutePreview] = Field(default_factory=list)
+    conversation_state: Dict[str, Any] = Field(default_factory=dict)

@@ -13,6 +13,8 @@ class Settings:
 
     INTENT_MIN_CONF: float = float(os.getenv("INTENT_MIN_CONF", "0.50"))
     SLOT_MIN_CONF: float = float(os.getenv("SLOT_MIN_CONF", "0.65"))
+    SESSION_TTL_SECONDS: int = int(os.getenv("SESSION_TTL_SECONDS", "3600"))
+    SESSION_MAX_SESSIONS: int = int(os.getenv("SESSION_MAX_SESSIONS", "10000"))
 
 
 settings = Settings()

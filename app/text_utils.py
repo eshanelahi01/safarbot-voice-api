@@ -1,8 +1,21 @@
 import re
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 
 URDU_RE = re.compile(r"[\u0600-\u06FF]")
+
+EN_NUMBER_MAP = {
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+}
 
 URDU_NUMBER_MAP = {
     "ایک": 1,
@@ -15,6 +28,38 @@ URDU_NUMBER_MAP = {
     "آٹھ": 8,
     "نو": 9,
     "دس": 10,
+}
+
+SEAT_HINTS_EN = (
+    "seat",
+    "seats",
+    "ticket",
+    "tickets",
+    "passenger",
+    "passengers",
+    "person",
+    "people",
+)
+
+SEAT_HINTS_UR = (
+    "سیٹ",
+    "سیٹیں",
+    "ٹکٹ",
+    "ٹکٹس",
+    "مسافر",
+    "افراد",
+)
+
+EXPLICIT_ROUTE_PATTERNS = {
+    1: ("first", "1st", "option 1", "number 1", "route 1", "bus 1"),
+    2: ("second", "2nd", "option 2", "number 2", "route 2", "bus 2"),
+    3: ("third", "3rd", "option 3", "number 3", "route 3", "bus 3"),
+}
+
+URDU_ROUTE_PATTERNS = {
+    1: ("پہلی", "پہلا", "آپشن 1", "نمبر 1"),
+    2: ("دوسری", "دوسرا", "آپشن 2", "نمبر 2"),
+    3: ("تیسری", "تیسرا", "آپشن 3", "نمبر 3"),
 }
 
 
@@ -34,7 +79,28 @@ def detect_reply_lang(text: str) -> str:
     return "en"
 
 
-def extract_date_from_text(text: str, today=None):
+def _extract_number_value(text: str) -> int | None:
+    normalized = normalize_text(text)
+    if not normalized:
+        return None
+
+    match = re.search(r"\b(\d+)\b", normalized)
+    if match:
+        return int(match.group(1))
+
+    lower = normalized.lower()
+    for word, value in EN_NUMBER_MAP.items():
+        if re.search(rf"\b{re.escape(word)}\b", lower):
+            return value
+
+    for word, value in URDU_NUMBER_MAP.items():
+        if word in normalized:
+            return value
+
+    return None
+
+
+def extract_date_from_text(text: str, today: date | None = None):
     today = today or datetime.utcnow().date()
     text = normalize_text(text)
     lower = text.lower()
@@ -63,32 +129,63 @@ def extract_date_from_text(text: str, today=None):
         "اتوار": 6,
     }
 
-    for k, v in weekday_map.items():
-        if k in lower or k in text:
-            delta = (v - today.weekday() + 7) % 7
+    for weekday, weekday_index in weekday_map.items():
+        if weekday in lower or weekday in text:
+            delta = (weekday_index - today.weekday() + 7) % 7
             delta = 7 if delta == 0 else delta
             return (today + timedelta(days=delta)).isoformat()
 
     return None
 
 
-def parse_seat_count(text: str):
-    text = normalize_text(text)
-    match = re.search(r"\b(\d+)\b", text)
-    if match:
-        return int(match.group(1))
-    for k, v in URDU_NUMBER_MAP.items():
-        if k in text:
-            return v
-    return None
+def parse_seat_count(text: str, expected_action: str | None = None):
+    normalized = normalize_text(text)
+    if not normalized:
+        return None
+
+    lower = normalized.lower()
+    seat_hints = any(keyword in lower for keyword in SEAT_HINTS_EN) or any(
+        keyword in normalized for keyword in SEAT_HINTS_UR
+    )
+    explicit_route_choice = extract_route_choice(normalized)
+
+    if explicit_route_choice is not None and not seat_hints:
+        return None
+
+    if not seat_hints and expected_action != "ASK_SEAT_COUNT":
+        return None
+
+    return _extract_number_value(normalized)
 
 
-def extract_route_choice(text: str):
-    t = normalize_text(text).lower()
-    if any(x in t for x in ["first", "option 1", "number 1", "پہلی", "پہلا"]):
-        return 1
-    if any(x in t for x in ["second", "option 2", "number 2", "دوسری", "دوسرا"]):
-        return 2
-    if any(x in t for x in ["third", "option 3", "number 3", "تیسری", "تیسرا"]):
-        return 3
+def extract_route_choice(text: str, expected_action: str | None = None):
+    normalized = normalize_text(text)
+    if not normalized:
+        return None
+
+    lower = normalized.lower()
+
+    for value, patterns in EXPLICIT_ROUTE_PATTERNS.items():
+        if any(pattern in lower for pattern in patterns):
+            return value
+
+    for value, patterns in URDU_ROUTE_PATTERNS.items():
+        if any(pattern in normalized for pattern in patterns):
+            return value
+
+    if expected_action == "SEARCH_ROUTES":
+        stripped = normalized.strip()
+        if stripped.isdigit():
+            bare_value = int(stripped)
+            return bare_value if 1 <= bare_value <= 3 else None
+
+        lower_stripped = stripped.lower()
+        for word, value in EN_NUMBER_MAP.items():
+            if lower_stripped == word and 1 <= value <= 3:
+                return value
+
+        for word, value in URDU_NUMBER_MAP.items():
+            if stripped == word and 1 <= value <= 3:
+                return value
+
     return None

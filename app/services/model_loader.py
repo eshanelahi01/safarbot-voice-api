@@ -10,6 +10,10 @@ from app.config import settings
 
 class ModelRegistry:
     def __init__(self):
+        self.error = None
+        self._clear()
+
+    def _clear(self):
         self.intent_tokenizer = None
         self.intent_model = None
         self.slot_tokenizer = None
@@ -19,12 +23,28 @@ class ModelRegistry:
         self.ready = False
 
     def load(self):
+        self.error = None
+        self._clear()
+
+        try:
+            self._load()
+            self.ready = True
+        except Exception as exc:
+            self.error = str(exc)
+            self._clear()
+
+    def _load(self):
+        missing_settings = []
         if not settings.HF_TOKEN:
-            raise ValueError("HF_TOKEN is not set")
+            missing_settings.append("HF_TOKEN")
         if not settings.INTENT_MODEL_REPO:
-            raise ValueError("INTENT_MODEL_REPO is not set")
+            missing_settings.append("INTENT_MODEL_REPO")
         if not settings.SLOT_MODEL_REPO:
-            raise ValueError("SLOT_MODEL_REPO is not set")
+            missing_settings.append("SLOT_MODEL_REPO")
+
+        if missing_settings:
+            joined_settings = ", ".join(missing_settings)
+            raise ValueError(f"Missing required settings: {joined_settings}")
 
         self.intent_tokenizer = AutoTokenizer.from_pretrained(
             settings.INTENT_MODEL_REPO,
@@ -62,7 +82,11 @@ class ModelRegistry:
             device=-1,
         )
 
-        self.ready = True
+    def status(self) -> dict:
+        return {
+            "ready": self.ready,
+            "error": self.error,
+        }
 
 
 registry = ModelRegistry()

@@ -1,39 +1,101 @@
 from app.config import settings
+from app.services.session_store import new_session_state, session_store
 
 
-SESSION_STORE = {}
+SUPPORTED_LANGS = {"en", "ur", "mixed"}
 
 FINAL_NOTICE = {
     "en": "Please purchase this ticket from the terminal at least 2 hours before departure.",
-    "ur": "براہِ کرم روانگی سے کم از کم 2 گھنٹے پہلے ٹرمینل سے یہ ٹکٹ خرید لیں۔",
+    "ur": "براہ کرم روانگی سے کم از کم 2 گھنٹے پہلے ٹرمینل سے یہ ٹکٹ خرید لیں۔",
     "mixed": "Please terminal se ticket departure se kam az kam 2 ghantay pehle purchase kar lein.",
 }
 
 
-def get_session(session_id: str) -> dict:
-    if session_id not in SESSION_STORE:
-        SESSION_STORE[session_id] = {
-            "reply_lang": None,
-            "slots": {},
-            "route_choice": None,
-            "seat_count": None,
-            "last_action": None,
-        }
-    return SESSION_STORE[session_id]
+def _sanitize_slots(slots: dict | None) -> dict:
+    if not isinstance(slots, dict):
+        return {}
+    return {key: value for key, value in slots.items() if value is not None}
+
+
+def _coerce_positive_int(value):
+    if isinstance(value, int) and value > 0:
+        return value
+    if isinstance(value, str) and value.isdigit():
+        parsed = int(value)
+        return parsed if parsed > 0 else None
+    return None
+
+
+def serialize_session(session: dict) -> dict:
+    state = new_session_state()
+
+    reply_lang = session.get("reply_lang")
+    if reply_lang in SUPPORTED_LANGS:
+        state["reply_lang"] = reply_lang
+
+    state["slots"] = _sanitize_slots(session.get("slots"))
+    state["route_choice"] = _coerce_positive_int(session.get("route_choice"))
+    state["seat_count"] = _coerce_positive_int(session.get("seat_count"))
+
+    last_action = session.get("last_action")
+    if isinstance(last_action, str) and last_action:
+        state["last_action"] = last_action
+
+    return state
+
+
+def _merge_session(base: dict, override: dict) -> dict:
+    merged = serialize_session(base)
+    override_state = serialize_session(override)
+
+    if override_state["reply_lang"] is not None:
+        merged["reply_lang"] = override_state["reply_lang"]
+
+    merged["slots"].update(override_state["slots"])
+
+    for key in ("route_choice", "seat_count", "last_action"):
+        if override_state[key] is not None:
+            merged[key] = override_state[key]
+
+    return merged
+
+
+def _extract_conversation_state(context: dict | None) -> dict | None:
+    if not isinstance(context, dict):
+        return None
+
+    candidate = context.get("conversation_state")
+    if isinstance(candidate, dict):
+        return candidate
+
+    session_keys = {"reply_lang", "slots", "route_choice", "seat_count", "last_action"}
+    if session_keys.intersection(context):
+        return context
+
+    return None
+
+
+def get_session(session_id: str, context: dict | None = None) -> dict:
+    session = session_store.get(session_id)
+    context_state = _extract_conversation_state(context)
+    if context_state is not None:
+        session = _merge_session(session, context_state)
+    return session
 
 
 def choose_reply_lang(session: dict, detected_lang: str) -> str:
     if session["reply_lang"] is None:
-        session["reply_lang"] = detected_lang
-        return detected_lang
+        session["reply_lang"] = detected_lang if detected_lang in SUPPORTED_LANGS else "en"
+        return session["reply_lang"]
 
-    if detected_lang in ["ur", "mixed"]:
+    if detected_lang in {"ur", "mixed"}:
         session["reply_lang"] = detected_lang
 
     return session["reply_lang"]
 
 
 def build_reply(action: str, lang: str) -> str:
+    lang = lang if lang in SUPPORTED_LANGS else "en"
     replies = {
         "ASK_FROM": {
             "en": "What city are you departing from?",
@@ -63,21 +125,25 @@ def build_reply(action: str, lang: str) -> str:
         "FINAL_NOTICE": FINAL_NOTICE,
         "FALLBACK": {
             "en": "Please say that again.",
-            "ur": "براہِ کرم دوبارہ کہیں۔",
+            "ur": "براہ کرم دوبارہ کہیں۔",
             "mixed": "Please dobara batayein.",
         },
     }
-    return replies.get(action, replies["FALLBACK"])[lang]
+    return replies.get(action, replies["FALLBACK"]).get(lang, replies["FALLBACK"]["en"])
 
 
-def decide(session_id: str, nlu: dict, context: dict | None = None) -> dict:
-    context = context or {}
-    session = get_session(session_id)
+def decide(
+    session_id: str,
+    nlu: dict,
+    context: dict | None = None,
+    session: dict | None = None,
+) -> dict:
+    session = session or get_session(session_id, context)
 
     lang = choose_reply_lang(session, nlu["detected_lang"])
 
-    for k, v in nlu["slots_normalized"].items():
-        session["slots"][k] = v
+    for key, value in nlu["slots_normalized"].items():
+        session["slots"][key] = value
 
     if nlu["slots_normalized"].get("route_choice") is not None:
         session["route_choice"] = nlu["slots_normalized"]["route_choice"]
@@ -103,9 +169,12 @@ def decide(session_id: str, nlu: dict, context: dict | None = None) -> dict:
         action = "FINAL_NOTICE"
 
     session["last_action"] = action
+    session_store.save(session_id, session)
 
+    conversation_state = serialize_session(session)
     return {
-        "session": session,
+        "session": conversation_state,
+        "conversation_state": conversation_state,
         "next_action": action,
         "reply_text": build_reply(action, lang),
         "reply_lang": lang,
