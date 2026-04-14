@@ -1,0 +1,20 @@
+{
+  "cities": [
+    "Islamabad",
+    "Rawalpindi",
+    "Lahore",
+    "Faisalabad",
+    "Multan",
+    "Peshawar",
+    "Karachi",
+    "Sialkot",
+    "Gujranwala"
+  ],
+  "providers": [
+    "Daewoo",
+    "Faisal Movers",
+    "Niazi Express",
+    "Skyways"
+  ],
+  "terminals": []
+}

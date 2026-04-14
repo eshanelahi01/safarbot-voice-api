@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: safarbot-render-api
+    env: python
+    plan: standard
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /readyz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.10
+      - key: HF_TOKEN
+        sync: false
+      - key: INTENT_MODEL_REPO
+        sync: false
+      - key: SLOT_MODEL_REPO
+        sync: false
+      - key: INTENT_MIN_CONF
+        value: "0.50"
+      - key: SLOT_MIN_CONF
+        value: "0.65"
