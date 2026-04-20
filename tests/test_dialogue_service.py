@@ -27,6 +27,7 @@ class DialogueServiceTests(unittest.TestCase):
             "session-1",
             {
                 "detected_lang": "en",
+                "intent": "select_seats",
                 "slots_normalized": {"seat_count": 2},
                 "intent_confidence": 0.95,
             },
@@ -34,7 +35,7 @@ class DialogueServiceTests(unittest.TestCase):
             session=session,
         )
 
-        self.assertEqual(decision["next_action"], "FINAL_NOTICE")
+        self.assertEqual(decision["next_action"], "ASK_PAYMENT")
         self.assertEqual(decision["conversation_state"]["seat_count"], 2)
         self.assertEqual(decision["conversation_state"]["slots"]["from"], "Lahore")
 

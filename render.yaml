@@ -1,20 +1,28 @@
 services:
   - type: web
-    name: safarbot-render-api
+    name: safarbot-ai
     env: python
-    plan: standard
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /readyz
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.10
+      - key: APP_NAME
+        value: SafarBot AI Service
       - key: HF_TOKEN
         sync: false
-      - key: INTENT_MODEL_REPO
+      - key: INTENT_MODEL
         sync: false
-      - key: SLOT_MODEL_REPO
+      - key: SLOT_MODEL
         sync: false
+      - key: BACKEND_URL
+        sync: false
+      - key: USE_GPU
+        value: "0"
+      - key: MODEL_LOAD_ON_STARTUP
+        value: "0"
       - key: INTENT_MIN_CONF
         value: "0.50"
       - key: SLOT_MIN_CONF
@@ -23,3 +31,5 @@ services:
         value: "3600"
       - key: SESSION_MAX_SESSIONS
         value: "10000"
+      - key: REQUEST_TIMEOUT_SECONDS
+        value: "12"

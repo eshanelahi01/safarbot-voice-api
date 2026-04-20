@@ -1,0 +1,41 @@
+{
+  "cities": [
+    "Islamabad",
+    "Rawalpindi",
+    "Lahore",
+    "Faisalabad",
+    "Multan",
+    "Peshawar",
+    "Karachi",
+    "Sialkot",
+    "Gujranwala"
+  ],
+  "providers": [
+    "Daewoo",
+    "Faisal Movers",
+    "Niazi Express",
+    "Skyways"
+  ],
+  "terminals": [],
+  "city_aliases": {
+    "isb": "Islamabad",
+    "isb city": "Islamabad",
+    "rwp": "Rawalpindi",
+    "lhr": "Lahore",
+    "fsd": "Faisalabad",
+    "khi": "Karachi"
+  },
+  "provider_aliases": {
+    "faisal mover": "Faisal Movers",
+    "daewoo express": "Daewoo"
+  },
+  "terminal_aliases": {},
+  "payment_aliases": {
+    "cash": "cash",
+    "cash payment": "cash",
+    "cash on terminal": "cash",
+    "naqad": "cash",
+    "naqd": "cash",
+    "نقد": "cash"
+  }
+}

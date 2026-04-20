@@ -1,0 +1,69 @@
+{
+  "supported_languages": [
+    "en",
+    "ur",
+    "mixed"
+  ],
+  "actions": {
+    "GREETING": {
+      "en": "Hello! Where do you want to go?",
+      "ur": "السلام علیکم، آپ کہاں جانا چاہتے ہیں؟",
+      "mixed": "Hello, aap kahan jana chahte hain?"
+    },
+    "ASK_FROM": {
+      "en": "What city are you departing from?",
+      "ur": "آپ کہاں سے روانہ ہونا چاہتے ہیں؟",
+      "mixed": "Aap kis city se jana chahte hain?"
+    },
+    "ASK_TO": {
+      "en": "What is your destination city?",
+      "ur": "آپ کہاں جانا چاہتے ہیں؟",
+      "mixed": "Aap kahan jana chahte hain?"
+    },
+    "ASK_DATE": {
+      "en": "Which date do you want to travel?",
+      "ur": "آپ کس تاریخ کو سفر کرنا چاہتے ہیں؟",
+      "mixed": "Aap kis date ko travel karna chahte hain?"
+    },
+    "CALL_GET_ROUTES": {
+      "en": "Here are the available routes. Please choose one.",
+      "ur": "یہ دستیاب روٹس ہیں، براہ کرم ایک منتخب کریں۔",
+      "mixed": "Yeh available routes hain, please aik select karein."
+    },
+    "ASK_ROUTE_CHOICE": {
+      "en": "Please choose one of the available routes.",
+      "ur": "براہ کرم دستیاب روٹس میں سے ایک منتخب کریں۔",
+      "mixed": "Please available routes mein se aik choose karein."
+    },
+    "ASK_SEAT_COUNT": {
+      "en": "How many seats do you want?",
+      "ur": "آپ کتنی سیٹیں چاہتے ہیں؟",
+      "mixed": "Aap kitni seats chahte hain?"
+    },
+    "ASK_PAYMENT": {
+      "en": "How would you like to pay?",
+      "ur": "آپ ادائیگی کیسے کرنا چاہتے ہیں؟",
+      "mixed": "Aap payment kaise karna chahte hain?"
+    },
+    "PAYMENT_UNSUPPORTED": {
+      "en": "Only cash payment is supported right now.",
+      "ur": "اس وقت صرف نقد ادائیگی دستیاب ہے۔",
+      "mixed": "Abhi sirf cash payment supported hai."
+    },
+    "ASK_CONFIRM_BOOKING": {
+      "en": "Please confirm if you want to book this ticket.",
+      "ur": "براہ کرم تصدیق کریں کہ کیا آپ یہ ٹکٹ بک کرنا چاہتے ہیں۔",
+      "mixed": "Please confirm karein ke aap yeh ticket book karna chahte hain."
+    },
+    "CALL_BOOK": {
+      "en": "Booking is being placed now.",
+      "ur": "اب بکنگ کی جا رہی ہے۔",
+      "mixed": "Ab booking place ki ja rahi hai."
+    },
+    "FALLBACK": {
+      "en": "Please say that again.",
+      "ur": "براہ کرم دوبارہ کہیں۔",
+      "mixed": "Please dobara batayein."
+    }
+  }
+}
