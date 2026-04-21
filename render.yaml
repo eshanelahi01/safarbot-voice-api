@@ -33,3 +33,5 @@ services:
         value: "10000"
       - key: REQUEST_TIMEOUT_SECONDS
         value: "12"
+      - key: TTS_GTTS_ENABLED
+        value: "1"

@@ -1,13 +1,15 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 
 from app.config import settings
 from app.core.dialogue import decide, dialogue_status, get_session, load_dialogue_rules
 from app.core.normalizer import load_normalizer_assets, normalizer_status
-from app.core.tools import BackendServiceError, book_ticket, get_routes
-from app.nlu import load_models, model_status, predict_text
-from app.schemas import ChatResponse, Query, TextRequest, VoiceResponse
+from app.nlu import load_models, nlu_status
+from app.schemas import ChatResponse, Query, TextRequest, VoiceChatRequest, VoiceResponse
+from app.services.voice_pipeline import build_chat_response, build_voice_response
+from app.stt import stt_status
+from app.tts import tts_status
 
 
 @asynccontextmanager
@@ -29,19 +31,27 @@ app = FastAPI(
 def dependency_status() -> dict:
     backend_ready = bool(settings.BACKEND_URL)
     return {
-        **model_status(),
+        "nlu": nlu_status(),
         "normalizer_assets": normalizer_status(),
         "dialogue_rules": dialogue_status(),
         "backend": {
             "ready": backend_ready,
             "error": None if backend_ready else "BACKEND_URL is not configured",
         },
+        "stt": stt_status(),
+        "tts": tts_status(),
     }
 
 
 def ensure_dependencies_ready() -> dict:
+    if not normalizer_status()["ready"]:
+        load_normalizer_assets()
+    if not dialogue_status()["ready"]:
+        load_dialogue_rules()
+
     status = dependency_status()
-    if not all(service["ready"] for service in status.values()):
+    required_services = ("nlu", "normalizer_assets", "dialogue_rules", "tts")
+    if not all(status[name]["ready"] for name in required_services):
         raise HTTPException(
             status_code=503,
             detail={
@@ -70,7 +80,8 @@ def healthz():
 @app.get("/readyz")
 def readyz():
     status = dependency_status()
-    if not all(service["ready"] for service in status.values()):
+    required_services = ("nlu", "normalizer_assets", "dialogue_rules", "tts")
+    if not all(status[name]["ready"] for name in required_services):
         raise HTTPException(
             status_code=503,
             detail={
@@ -81,92 +92,51 @@ def readyz():
     return {"ready": True, "dependencies": status}
 
 
-def _build_response(payload: Query) -> ChatResponse:
-    ensure_dependencies_ready()
-
-    session = get_session(payload.session_id, payload.context)
-    try:
-        nlu = predict_text(payload.text, expected_action=session.get("last_action"))
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "message": "NLU models are not ready",
-                "error": str(exc),
-                "dependencies": dependency_status(),
-            },
-        ) from exc
-    decision = decide(payload.session_id, nlu, payload.context, session=session)
-
-    response_type = "message"
-    payload_data = None
-
-    tool_payload = dict(decision["conversation_state"]["slots"])
-    if decision["conversation_state"].get("route_choice") is not None:
-        tool_payload["route_choice"] = decision["conversation_state"]["route_choice"]
-    if decision["conversation_state"].get("seat_count") is not None:
-        tool_payload["seat_count"] = decision["conversation_state"]["seat_count"]
-
-    try:
-        if decision["next_action"] == "CALL_GET_ROUTES":
-            payload_data = get_routes(tool_payload)
-            response_type = "routes"
-        elif decision["next_action"] == "CALL_BOOK":
-            payload_data = book_ticket(tool_payload)
-            response_type = "booking"
-    except BackendServiceError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-
-    response_slots = dict(decision["conversation_state"]["slots"])
-    if decision["conversation_state"].get("route_choice") is not None:
-        response_slots["route_choice"] = decision["conversation_state"]["route_choice"]
-    if decision["conversation_state"].get("seat_count") is not None:
-        response_slots["seat_count"] = decision["conversation_state"]["seat_count"]
-
-    return ChatResponse(
-        session_id=payload.session_id,
-        user_text=nlu["user_text"],
-        detected_lang=nlu["detected_lang"],
-        intent=nlu["intent"],
-        confidence=nlu["intent_confidence"],
-        slots=response_slots,
-        slots_raw=nlu["slots_raw"],
-        correction_meta=nlu["correction_meta"],
-        action=decision["next_action"],
-        response=decision["reply_text"],
-        type=response_type,
-        data=payload_data,
-        conversation_state=decision["conversation_state"],
-    )
-
-
 @app.post("/chat", response_model=ChatResponse)
-def chat(payload: Query):
+def chat(payload: Query, authorization: str | None = Header(default=None, alias="Authorization")):
     if not payload.text.strip():
         raise HTTPException(status_code=400, detail="text cannot be empty")
 
-    return _build_response(payload)
+    ensure_dependencies_ready()
+    return build_chat_response(payload, authorization=authorization)
 
 
 @app.post("/voice/text", response_model=VoiceResponse)
-def voice_text(payload: TextRequest):
+def voice_text(payload: TextRequest, authorization: str | None = Header(default=None, alias="Authorization")):
     if not payload.text.strip():
         raise HTTPException(status_code=400, detail="text cannot be empty")
 
-    response = _build_response(payload)
-
-    return VoiceResponse(
-        session_id=response.session_id,
-        user_text=response.user_text,
-        detected_lang=response.detected_lang,
-        intent=response.intent,
-        intent_confidence=response.confidence,
-        slots_raw=response.slots_raw,
-        slots_normalized=response.slots,
-        correction_meta=response.correction_meta,
-        next_action=response.action,
-        reply_text=response.response,
-        audio_base64="",
-        routes_preview=[],
-        conversation_state=response.conversation_state,
+    ensure_dependencies_ready()
+    return build_voice_response(
+        VoiceChatRequest(
+            text=payload.text,
+            session_id=payload.session_id,
+            context=payload.context,
+            response_mode="voice",
+        ),
+        authorization=authorization,
     )
+
+
+@app.post("/voice/chat", response_model=VoiceResponse)
+def voice_chat(
+    payload: VoiceChatRequest,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+):
+    if not payload.text.strip() and not payload.audio_base64.strip():
+        raise HTTPException(status_code=400, detail="Provide either text or audio_base64")
+
+    ensure_dependencies_ready()
+    return build_voice_response(payload, authorization=authorization)
+
+
+@app.post("/api/voice/chat", response_model=VoiceResponse)
+def api_voice_chat(
+    payload: VoiceChatRequest,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+):
+    if not payload.text.strip() and not payload.audio_base64.strip():
+        raise HTTPException(status_code=400, detail="Provide either text or audio_base64")
+
+    ensure_dependencies_ready()
+    return build_voice_response(payload, authorization=authorization)

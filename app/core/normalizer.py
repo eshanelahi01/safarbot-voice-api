@@ -9,6 +9,7 @@ from app.config import settings
 
 
 URDU_RE = re.compile(r"[\u0600-\u06FF]")
+SPELLED_ACRONYM_RE = re.compile(r"\b(?:[A-Za-z][\-./]){1,}[A-Za-z]\b")
 
 EN_NUMBER_MAP = {
     "one": 1,
@@ -85,8 +86,16 @@ DEFAULT_ASSETS = {
 }
 
 
+def _collapse_spelled_acronyms(text: str) -> str:
+    return SPELLED_ACRONYM_RE.sub(
+        lambda match: re.sub(r"[^A-Za-z]", "", match.group(0)),
+        text,
+    )
+
+
 def normalize_text(text: str) -> str:
     text = str(text or "").strip()
+    text = _collapse_spelled_acronyms(text)
     return re.sub(r"\s+", " ", text)
 
 
@@ -342,7 +351,14 @@ class NormalizerService:
         if normalized.get("seat_count") is not None:
             normalized["seat_count"] = _extract_number_value(str(normalized["seat_count"]))
 
-        date_rule = extract_date_from_text(text)
+        normalized_date = normalized.get("date")
+        if normalized_date:
+            date_rule = extract_date_from_text(str(normalized_date))
+            normalized["date"] = date_rule or normalize_text(str(normalized_date))
+            if date_rule:
+                meta["date_source"] = "slot_rule"
+        else:
+            date_rule = extract_date_from_text(text)
         if date_rule and not normalized.get("date"):
             normalized["date"] = date_rule
             meta["date_source"] = "rule"
