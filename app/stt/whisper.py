@@ -1,4 +1,5 @@
 from pathlib import Path
+from importlib.util import find_spec
 from tempfile import NamedTemporaryFile
 
 from app.config import settings
@@ -6,13 +7,19 @@ from app.core.normalizer import normalize_text
 from app.utils.logger import get_logger
 
 
-try:
-    from faster_whisper import WhisperModel
-except ModuleNotFoundError:
-    WhisperModel = None
-
-
 logger = get_logger(__name__)
+
+
+def _whisper_installed() -> bool:
+    return find_spec("faster_whisper") is not None
+
+
+def _import_whisper_model():
+    try:
+        from faster_whisper import WhisperModel
+    except ModuleNotFoundError:
+        return None
+    return WhisperModel
 
 
 def _audio_suffix(audio_format: str | None) -> str:
@@ -47,6 +54,7 @@ class WhisperSTTService:
         self.error = None
         self.model = None
 
+        WhisperModel = _import_whisper_model()
         if WhisperModel is None:
             self.error = "faster-whisper is not installed"
             return
@@ -93,7 +101,7 @@ class WhisperSTTService:
                 Path(temp_path).unlink(missing_ok=True)
 
     def status(self) -> dict:
-        configured = WhisperModel is not None
+        configured = _whisper_installed()
         return {
             "ready": self.ready,
             "configured": configured,

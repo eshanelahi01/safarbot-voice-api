@@ -1,19 +1,34 @@
-try:
-    import torch
-except ModuleNotFoundError:
-    torch = None
-
-try:
-    from transformers import AutoModelForTokenClassification, AutoTokenizer
-except ModuleNotFoundError:
-    AutoModelForTokenClassification = None
-    AutoTokenizer = None
+from importlib.util import find_spec
 
 from app.config import settings
 from app.utils.logger import get_logger
 
 
 logger = get_logger(__name__)
+
+
+def _torch_installed() -> bool:
+    return find_spec("torch") is not None
+
+
+def _transformers_installed() -> bool:
+    return find_spec("transformers") is not None
+
+
+def _import_torch():
+    try:
+        import torch
+    except ModuleNotFoundError:
+        return None
+    return torch
+
+
+def _import_transformers():
+    try:
+        from transformers import AutoModelForTokenClassification, AutoTokenizer
+    except ModuleNotFoundError:
+        return None, None
+    return AutoModelForTokenClassification, AutoTokenizer
 
 
 class SlotPredictor:
@@ -33,10 +48,12 @@ class SlotPredictor:
             self.error = "SLOT_MODEL is not configured"
             return
 
+        torch = _import_torch()
         if torch is None:
             self.error = "torch is not installed"
             return
 
+        AutoModelForTokenClassification, AutoTokenizer = _import_transformers()
         if AutoTokenizer is None or AutoModelForTokenClassification is None:
             self.error = "transformers is not installed"
             return
@@ -69,8 +86,10 @@ class SlotPredictor:
         if not self.ready or self.tokenizer is None or self.model is None:
             raise RuntimeError(self.error or "Slot model is not ready")
 
+        torch = _import_torch()
         if torch is None:
             raise RuntimeError("torch is not installed")
+        AutoModelForTokenClassification, AutoTokenizer = _import_transformers()
         if AutoTokenizer is None or AutoModelForTokenClassification is None:
             raise RuntimeError("transformers is not installed")
 
@@ -119,9 +138,9 @@ class SlotPredictor:
         if status_error is None:
             if not settings.SLOT_MODEL:
                 status_error = "SLOT_MODEL is not configured"
-            elif torch is None:
+            elif not _torch_installed():
                 status_error = "torch is not installed"
-            elif AutoTokenizer is None or AutoModelForTokenClassification is None:
+            elif not _transformers_installed():
                 status_error = "transformers is not installed"
 
         deferred = (
