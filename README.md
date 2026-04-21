@@ -1,3 +1,13 @@
+---
+title: SafarBot Voice API
+emoji: 🎙️
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 10000
+short_description: FastAPI voice API for STT, NLU, route search, and TTS responses
+---
+
 # SafarBot AI Service
 
 FastAPI service for SafarBot NLU, normalization, dialogue flow, and backend tool calls.
